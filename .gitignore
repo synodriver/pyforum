@@ -1,0 +1,7 @@
+*.db
+.idea/
+*.env
+*.pyc
+*.pyd
+*.so
+*.dll

@@ -1,0 +1,17 @@
+fastapi
+starsessions
+pydantic>=2
+pydantic-settings
+email-validator>=2.0.0
+nonecorn>=0.16.0.dev1
+gunicorn
+orjson
+python-multipart
+redis>=4
+asyncpg
+aiosqlite
+captcha
+passlib[bcrypt]
+aiosmtplib>=3.0.1
+bitarray
+alembic
