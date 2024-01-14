@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlmodel import and_, func, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from pyforum.models import Group, Item, User, UserGroupLink, UserItemLink
+from pyforum.models import Group, Item, Thread, User, UserGroupLink, UserItemLink
 from pyforum.routers.admin.models import PatchUser, Search
 from pyforum.utils import pwd_context
 
@@ -17,7 +17,6 @@ from pyforum.utils import pwd_context
 async def get_user_groups(
     session: AsyncSession, group_id: Optional[int] = None, name: Optional[str] = None
 ) -> List[Group]:
-    group = []
     if group_id is not None:
         group = (await session.exec(select(Group).where(Group.id == group_id))).all()
     elif name is not None:
@@ -51,7 +50,8 @@ async def patch_user_group(
     name: Optional[str] = None,
     description: Optional[str] = None,
 ):
-    try:
+    group: Group = (await session.exec(select(Group).where(Group.id == id))).one()
+    if name is not None:
         group_count = (
             await session.exec(
                 func.count(
@@ -61,14 +61,11 @@ async def patch_user_group(
         ).one()[0]
         if group_count:
             raise HTTPException(status_code=409, detail=f"group {name} already exists")
-    except NoResultFound:
-        group: Group = (await session.exec(select(Group).where(Group.id == id))).one()
-        if name is not None:
-            group.name = name
-        if description is not None:
-            group.description = description
-        session.add(group)
-        await session.commit()
+        group.name = name
+    if description is not None:
+        group.description = description
+    session.add(group)
+    await session.commit()
 
 
 async def add_user(session: AsyncSession, name: str, email: str, password: str):
@@ -364,3 +361,56 @@ async def user_get_item(session: AsyncSession, user_id: int) -> list:
         d["count"] = link.count
         ret.append(d)
     return ret
+
+
+async def add_thread(session: AsyncSession, name: str, description: str):
+    try:
+        thread = (await session.exec(select(Thread).where(Thread.name == name))).one()
+        raise HTTPException(status_code=409, detail=f"thread {name} already exists")
+    except NoResultFound:
+        thread = Thread(name=name, description=description)
+        session.add(thread)
+        await session.commit()
+
+
+async def del_thread(session: AsyncSession, id: int) -> None:
+    thread = (await session.exec(select(Thread).where(Thread.id == id))).one()
+    await session.delete(thread)
+    await session.commit()
+
+
+async def get_thread(
+    session: AsyncSession, id: Optional[int] = None, name: Optional[str] = None
+) -> List[Thread]:
+    if id is not None:
+        threads = (await session.exec(select(Thread).where(Thread.id == id))).all()
+    elif name is not None:
+        threads = (await session.exec(select(Thread).where(Thread.name == name))).all()
+    else:
+        # 全部group
+        threads = (await session.exec(select(Thread))).all()
+    return threads
+
+
+async def patch_thread(
+    session: AsyncSession,
+    id: int,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+):
+    thread: Thread = (await session.exec(select(Thread).where(Thread.id == id))).one()
+    if name is not None:
+        thread_count = (
+            await session.exec(
+                func.count(
+                    select(Thread.id).where(and_(Thread.id != id, Thread.name == name))
+                )
+            )
+        ).one()[0]
+        if thread_count:
+            raise HTTPException(status_code=409, detail=f"thread {name} already exists")
+        thread.name = name
+    if description is not None:
+        thread.description = description
+    session.add(thread)
+    await session.commit()

@@ -23,3 +23,36 @@ DELETE http://127.0.0.1:8000/api/v1/admin/user_group?id=3
 Cookie: session=b7b59f46be06ed74a05fcd2ad52dedc2
 accept: application/json
 Content-Type: application/json
+###
+POST http://127.0.0.1:8000/api/v1/admin/thread
+Cookie: session=b7b59f46be06ed74a05fcd2ad52dedc2
+accept: application/json
+Content-Type: application/json
+
+{
+  "name": "测试板块",
+  "description": "测试板块"
+}
+###
+GET http://127.0.0.1:8000/api/v1/admin/thread
+Cookie: session=b7b59f46be06ed74a05fcd2ad52dedc2
+accept: application/json
+Content-Type: application/json
+
+###
+PATCH http://127.0.0.1:8000/api/v1/admin/thread
+Cookie: session=b7b59f46be06ed74a05fcd2ad52dedc2
+accept: application/json
+Content-Type: application/json
+
+{
+  "id": 1,
+  "name": "测试板块 测试板块",
+  "description": "测试板块 测试板块"
+}
+
+###
+DELETE http://127.0.0.1:8000/api/v1/admin/thread?id=1
+Cookie: session=b7b59f46be06ed74a05fcd2ad52dedc2
+accept: application/json
+Content-Type: application/json

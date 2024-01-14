@@ -14,15 +14,19 @@ from pyforum.config import settings
 from pyforum.depends import check_admin_or_raise, get_db_session, get_groups, get_redis
 from pyforum.routers.admin.crud import (
     add_item_class,
+    add_thread,
     add_user,
     add_user_group,
     del_item_class,
+    del_thread,
     del_user,
     del_user_groups,
     get_item_class,
+    get_thread,
     get_user,
     get_user_groups,
     patch_item_class,
+    patch_thread,
     patch_user,
     patch_user_group,
     search_user_or_group,
@@ -36,10 +40,12 @@ from pyforum.routers.admin.crud import (
 from pyforum.routers.admin.models import (
     AddGroup,
     AddItemClass,
+    AddThread,
     AddUser,
     DelItemClass,
     PatchGroup,
     PatchItemClass,
+    PatchThread,
     PatchUser,
     Search,
     UserAddGroup,
@@ -249,6 +255,45 @@ async def _(session: AsyncSession = Depends(get_db_session), id: int = Query(...
 
 
 #### thread帖子相关
+@router.post("/thread", description="新增板块", response_class=ORJSONResponse)
+async def _(
+    session: AsyncSession = Depends(get_db_session), body: AddThread = Body(...)
+):
+    await add_thread(session, body.name, body.description)
+    return {"msg": "ok"}
+
+
+@router.delete("/thread", description="删除板块", response_class=ORJSONResponse)
+async def _(
+    session: AsyncSession = Depends(get_db_session),
+    id: int = Query(..., description="thread_id"),
+):
+    await del_thread(session, id)
+    return {"msg": "ok"}
+
+
+@router.get("/thread", description="查看有哪些板块", response_class=ORJSONResponse)
+async def _(
+    session: AsyncSession = Depends(get_db_session),
+    id: Optional[int] = Query(None, description="thread_id"),
+    name: Optional[str] = Query(None, description="thread_name"),
+):
+    threads = await get_thread(session, id, name)
+    return {
+        "msg": "ok",
+        "threads": [
+            thread.model_dump(exclude_none=True, exclude={"auths"})
+            for thread in threads
+        ],
+    }
+
+
+@router.patch("/thread", description="修改板块", response_class=ORJSONResponse)
+async def _(
+    session: AsyncSession = Depends(get_db_session), body: PatchThread = Body(...)
+):
+    await patch_thread(session, body.id, body.name, body.description)
+    return {"msg": "ok"}
 
 
 @router.post("/gc", description="垃圾回收 降低内存占用", response_class=ORJSONResponse)

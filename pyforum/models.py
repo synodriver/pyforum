@@ -130,6 +130,7 @@ class Item(SQLModel, table=True):
     )  # sa_relationship_kwargs={"lazy": "selectin"})
     auths: List["ThreadAuth"] = Relationship(back_populates="item")
 
+
 class UserItemLink(SQLModel, table=True):
     """
     用户-物品多对多关系表
@@ -157,7 +158,7 @@ class Thread(SQLModel, table=True):
 
     __tablename__ = "thread"
     id: Optional[int] = Field(None, primary_key=True)
-    title: str = Field(...)
+    name: str = Field(..., alias="title")
     description: str = Field(..., description="描述")
 
     auths: List["ThreadAuth"] = Relationship(back_populates="thread")

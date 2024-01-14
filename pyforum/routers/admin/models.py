@@ -83,3 +83,14 @@ class UserAddItem(BaseModel):
 
 
 UserDelItem = UserAddItem
+
+
+class AddThread(BaseModel):
+    name: str = Field(..., max_length=200)
+    description: str = Field(..., max_length=200)
+
+
+class PatchThread(BaseModel):
+    id: int = Field(...)
+    name: Optional[str] = Field(..., max_length=200)
+    description: Optional[str] = Field(..., max_length=200)
