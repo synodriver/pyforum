@@ -1,0 +1,25 @@
+###
+
+# curl -X 'POST'
+#  'http://127.0.0.1:8000/api/v1/admin/user_group'
+#  -H 'accept: application/json'
+#  -H 'Content-Type: application/json'
+#  -d '{
+#  "user_id": 1,
+#  "group_id": 2
+#}'
+POST http://127.0.0.1:8000/api/v1/admin/user/group
+Cookie: session=b7b59f46be06ed74a05fcd2ad52dedc2
+accept: application/json
+Content-Type: application/json
+
+{
+  "user_id": 1,
+  "group_id": 3
+}
+
+###
+DELETE http://127.0.0.1:8000/api/v1/admin/user_group?id=3
+Cookie: session=b7b59f46be06ed74a05fcd2ad52dedc2
+accept: application/json
+Content-Type: application/json

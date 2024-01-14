@@ -8,9 +8,9 @@ from typing import List, Optional
 
 from bitarray import bitarray
 from pydantic import FilePath
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import Field, Relationship, SQLModel, create_engine
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlmodel import Field, Relationship, SQLModel, create_engine
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from pyforum.config import settings
 
@@ -128,7 +128,7 @@ class Item(SQLModel, table=True):
     user_item_link: List["UserItemLink"] = Relationship(
         back_populates="item"
     )  # sa_relationship_kwargs={"lazy": "selectin"})
-
+    auths: List["ThreadAuth"] = Relationship(back_populates="item")
 
 class UserItemLink(SQLModel, table=True):
     """
@@ -152,6 +152,32 @@ class UserItemLink(SQLModel, table=True):
     )  # sa_relationship_kwargs={"lazy": "selectin"})
 
 
+class Thread(SQLModel, table=True):
+    """板块"""
+
+    __tablename__ = "thread"
+    id: Optional[int] = Field(None, primary_key=True)
+    title: str = Field(...)
+    description: str = Field(..., description="描述")
+
+    auths: List["ThreadAuth"] = Relationship(back_populates="thread")
+
+
+class ThreadAuth(SQLModel, table=True):
+    """
+    板块{thread_id}所需要的权限 为{item_id}>={count}
+    """
+
+    __tablename__ = "thread_auth"
+    id: Optional[int] = Field(None, primary_key=True)
+    thread_id: Optional[int] = Field(None, foreign_key="thread.id")
+    item_id: int = Field(..., foreign_key="item.id")
+    count: int = Field(default=0, description="")
+
+    thread: Thread = Relationship(back_populates="auths")
+    item: Item = Relationship(back_populates="auths")
+
+
 async def init_db():
     sqlite_file_name = "data.db"
     sqlite_url = f"sqlite+aiosqlite:///{sqlite_file_name}"
@@ -159,15 +185,19 @@ async def init_db():
     async with engine.begin() as conn:
         # await conn.run_sync(SQLModel.metadata.drop_all)
         await conn.run_sync(SQLModel.metadata.create_all)
+
+
 async def test_query():
-    from sqlmodel import select, func
+    from sqlmodel import func, select
 
     sqlite_file_name = "data.db"
     sqlite_url = f"sqlite+aiosqlite:///{sqlite_file_name}"
     engine = create_async_engine(sqlite_url, echo=True)
     async with AsyncSession(engine) as session:
-        users = (await session.exec(select(User).where(User.name.like("%sy%")))).all()
+        # users = (await session.exec(select(User).where(User.name.like("%sy%")))).all()
+        users = (await session.exec(select(User).where(User.name == "1213213"))).all()
         print(users)
+
 
 if __name__ == "__main__":
     import asyncio

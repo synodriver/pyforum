@@ -14,7 +14,7 @@ from starsessions.stores.redis import RedisStore
 from pyforum.config import settings
 from pyforum.db import lifespan
 from pyforum.exceptions import RedirectException
-from pyforum.routers import secure, user
+from pyforum.routers import admin, secure, user
 
 app = FastAPI(
     title=settings.site_name, description="论坛后端", version="0.0.1", lifespan=lifespan
@@ -22,6 +22,7 @@ app = FastAPI(
 
 app.include_router(user.router)
 app.include_router(secure.router)
+app.include_router(admin.router)
 
 #### 加session中间件
 from starsessions.serializers import Serializer

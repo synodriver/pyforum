@@ -46,3 +46,40 @@ class Search(BaseModel):
     description: Optional[str] = Field(None, max_length=200)
     age: Optional[int] = Field(None)
     sign: Optional[str] = Field(None, max_length=100)
+
+
+class UserAddGroup(BaseModel):
+    user_id: int = Field(...)
+    group_id: int = Field(...)
+
+
+UserDelGroup = UserAddGroup
+
+
+class UserDelCookie(BaseModel):
+    id: int = Field(...)
+
+
+class AddItemClass(BaseModel):
+    name: str = Field(..., max_length=50)
+    description: str = Field(..., max_length=200)
+
+
+class DelItemClass(BaseModel):
+    id: int = Field(...)
+    delete_user: Optional[bool] = Field(False, description="是否在删除物品类的时候把用户拥有的该类物品也一起删了")
+
+
+class PatchItemClass(BaseModel):
+    id: int = Field(...)
+    name: Optional[str] = Field(None, max_length=20)
+    description: Optional[str] = Field(None, max_length=200)
+
+
+class UserAddItem(BaseModel):
+    user_id: int = Field(...)
+    item_id: int = Field(...)
+    count: Optional[int] = Field(1)
+
+
+UserDelItem = UserAddItem

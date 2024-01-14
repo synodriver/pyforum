@@ -5,12 +5,12 @@ Copyright (c) 2008-2024 synodriver <diguohuangjiajinweijun@gmail.com>
 from typing import List, Literal, Optional
 
 from fastapi import HTTPException
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlmodel import and_, func, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from pyforum.models import Group, User
-from pyforum.routers.admin import PatchUser, Search
+from pyforum.models import Group, Item, User, UserGroupLink, UserItemLink
+from pyforum.routers.admin.models import PatchUser, Search
 from pyforum.utils import pwd_context
 
 
@@ -47,17 +47,22 @@ async def add_user_group(session: AsyncSession, name: str, description: str):
 
 async def patch_user_group(
     session: AsyncSession,
-    group_id: int,
+    id: int,
     name: Optional[str] = None,
     description: Optional[str] = None,
 ):
     try:
-        group = (await session.exec(select(Group).where(Group.name == name))).one()
-        raise HTTPException(status_code=409, detail=f"group {name} already exists")
+        group_count = (
+            await session.exec(
+                func.count(
+                    select(Group.id).where(and_(Group.id != id, Group.name == name))
+                )
+            )
+        ).one()[0]
+        if group_count:
+            raise HTTPException(status_code=409, detail=f"group {name} already exists")
     except NoResultFound:
-        group: Group = (
-            await session.exec(select(Group).where(Group.id == group_id))
-        ).one()
+        group: Group = (await session.exec(select(Group).where(Group.id == id))).one()
         if name is not None:
             group.name = name
         if description is not None:
@@ -109,11 +114,39 @@ async def get_user(
         return user
 
 
-async def patch_user(session: AsyncSession, body: PatchUser):
+async def patch_user(session: AsyncSession, body: PatchUser):  # todo 判断重名
     user = (await session.exec(select(User).where(User.id == body.id))).one()
     if body.name is not None:
+        user_count = (
+            await session.exec(
+                func.count(
+                    select(User.id).where(
+                        and_(User.name == body.name, User.id != body.id)
+                    )
+                )
+            )
+        ).one()[
+            0
+        ]  # 是否有重名的
+        if user_count:
+            raise HTTPException(
+                status_code=409, detail=f"user {body.name} already exists"
+            )
         user.name = body.name
     if body.email is not None:
+        user_count = (
+            await session.exec(
+                func.count(
+                    select(User.id).where(
+                        and_(User.email == body.email, User.id != body.id)
+                    )
+                )
+            )
+        ).one()[
+            0
+        ]  # 是否有重email的
+        if user_count:
+            raise HTTPException(status_code=409, detail="email already exists")
         user.email = body.email
     if body.password is not None:
         user.password = pwd_context.hash(body.password)
@@ -157,3 +190,177 @@ async def search_user_or_group(
             query.append(Group.description.like(f"%{body.description}%"))
         groups = (await session.exec(select(Group).where(op_(*query)))).all()
         return groups
+
+
+async def user_add_group(session: AsyncSession, user_id: int, group_id: int):
+    try:
+        (await session.exec(select(User).where(User.id == user_id))).one()
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail=f"user {user_id} not found")
+    try:
+        (await session.exec(select(Group).where(Group.id == group_id))).one()
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail=f"group {group_id} not found")
+    try:
+        link = UserGroupLink(user_id=user_id, group_id=group_id)
+        session.add(link)
+        await session.commit()
+    except IntegrityError:
+        # 已经是这个组的成员了
+        raise HTTPException(
+            status_code=409, detail=f"user {user_id} is already in group {group_id}"
+        )
+
+
+async def user_del_group(session: AsyncSession, user_id: int, group_id: int):
+    link = (
+        await session.exec(
+            select(UserGroupLink).where(
+                and_(
+                    UserGroupLink.user_id == user_id, UserGroupLink.group_id == group_id
+                )
+            )
+        )
+    ).one()
+    await session.delete(link)
+    await session.commit()
+
+
+async def user_get_group(
+    session: AsyncSession,
+    user_id: int,
+) -> List[int]:
+    links: List[UserGroupLink] = (
+        await session.exec(
+            select(UserGroupLink).where(UserGroupLink.user_id == user_id)
+        )
+    ).all()
+    return [link.group_id for link in links]
+
+
+async def add_item_class(session: AsyncSession, name: str, description: str):
+    item_count = (
+        await session.exec(func.count(select(Item.id).where(Item.name == name)))
+    ).one()[0]
+    if item_count:
+        raise HTTPException(status_code=409, detail=f"item {name} already exists")
+    item = Item(name=name, description=description)
+    session.add(item)
+    await session.commit()
+
+
+async def del_item_class(session: AsyncSession, id: int, deluser: bool = False) -> None:
+    item = (await session.exec(select(Item).where(Item.id == id))).one()
+    await session.delete(item)
+    await session.commit()
+    if deluser:
+        links = (
+            await session.exec(select(UserItemLink).where(UserItemLink.item_id == id))
+        ).all()
+        for link in links:
+            await session.delete(link)
+        await session.commit()
+
+
+async def get_item_class(session: AsyncSession, id: Optional[int] = None):
+    if id is not None:
+        items = (await session.exec(select(Item).where(Item.id == id))).all()
+    else:
+        items = (await session.exec(select(Item))).all()
+    return items
+
+
+async def patch_item_class(
+    session: AsyncSession,
+    id: int,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+):
+    item = (await session.exec(select(Item).where(Item.id == id))).one()
+    if name is not None:
+        item_count = (
+            await session.exec(
+                func.count(
+                    select(Item.id).where(and_(Item.id != id, Item.name == name))
+                )
+            )
+        ).one()[0]
+        if item_count:
+            raise HTTPException(status_code=409, detail=f"item {name} already exists")
+        item.name = name
+    if description is not None:
+        item.description = description
+    session.add(item)
+    await session.commit()
+
+
+async def user_add_item(
+    session: AsyncSession, user_id: int, item_id: int, count: Optional[int] = 1
+):
+    try:
+        (await session.exec(select(User).where(User.id == user_id))).one()
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail=f"user {user_id} not found")
+    try:
+        (await session.exec(select(Item).where((Item.id == item_id)))).one()
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail=f"item {item_id} not found")
+
+    try:
+        link: UserItemLink = (
+            await session.exec(
+                select(UserItemLink).where(
+                    and_(
+                        UserItemLink.user_id == user_id, UserItemLink.item_id == item_id
+                    )
+                )
+            )
+        ).one()
+        link.count += count
+    except NoResultFound:  # 之前没有拥有过
+        link = UserItemLink(user_id=user_id, item_id=item_id, count=count)
+    session.add(link)
+    await session.commit()
+
+
+async def user_del_item(
+    session: AsyncSession, user_id: int, item_id: int, count: Optional[int] = 1
+):
+    try:
+        (await session.exec(select(User).where(User.id == user_id))).one()
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail=f"user {user_id} not found")
+    try:
+        (await session.exec(select(Item).where((Item.id == item_id)))).one()
+    except NoResultFound:
+        raise HTTPException(status_code=404, detail=f"item {item_id} not found")
+
+    try:
+        link: UserItemLink = (
+            await session.exec(
+                select(UserItemLink).where(
+                    and_(
+                        UserItemLink.user_id == user_id, UserItemLink.item_id == item_id
+                    )
+                )
+            )
+        ).one()
+        link.count -= count  # 允许减成负数
+        session.add(link)
+        await session.commit()
+    except NoResultFound:
+        return
+
+
+async def user_get_item(session: AsyncSession, user_id: int) -> list:
+    ret = []
+    links = (
+        await session.exec(select(UserItemLink).where(UserItemLink.user_id == user_id))
+    ).all()
+    # await session.ref
+    for link in links:
+        await session.refresh(link, ["count", "item"])
+        d = link.item.model_dump()
+        d["count"] = link.count
+        ret.append(d)
+    return ret
