@@ -1,3 +1,13 @@
+GET http://127.0.0.1:8000/api/v1/user/profile
+Cookie: session=b7b59f46be06ed74a05fcd2ad52dedc2
+accept: application/json
+###
+POST http://127.0.0.1:8000/api/v1/user/profile
+Cookie: session=b7b59f46be06ed74a05fcd2ad52dedc2
+accept: application/json
+Content-Type: application/json # fastapi/routing.py#L234
+
+{"sign": "测试签名1"}
 ###
 
 # curl -X 'POST'

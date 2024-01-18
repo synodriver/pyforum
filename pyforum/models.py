@@ -7,7 +7,9 @@ from functools import partial
 from typing import List, Optional
 
 from bitarray import bitarray
+from geoalchemy2 import Geometry
 from pydantic import FilePath
+from sqlalchemy import Column, DateTime, func
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import Field, Relationship, SQLModel, create_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -49,6 +51,8 @@ class User(SQLModel, table=True):
     groups: List["Group"] = Relationship(
         back_populates="users", link_model=UserGroupLink
     )
+    addresses: List["ViewAddress"] = Relationship(back_populates="author")
+    reads: List["Read"] = Relationship(back_populates="user")
 
 
 class Group(SQLModel, table=True):
@@ -128,7 +132,8 @@ class Item(SQLModel, table=True):
     user_item_link: List["UserItemLink"] = Relationship(
         back_populates="item"
     )  # sa_relationship_kwargs={"lazy": "selectin"})
-    auths: List["ThreadAuth"] = Relationship(back_populates="item")
+    thread_auths: List["ThreadAuth"] = Relationship(back_populates="item")
+    read_auths: List["ReadAuth"] = Relationship(back_populates="item")
 
 
 class UserItemLink(SQLModel, table=True):
@@ -162,6 +167,7 @@ class Thread(SQLModel, table=True):
     description: str = Field(..., description="描述")
 
     auths: List["ThreadAuth"] = Relationship(back_populates="thread")
+    reads: List["Read"] = Relationship(back_populates="thread")
 
 
 class ThreadAuth(SQLModel, table=True):
@@ -173,10 +179,78 @@ class ThreadAuth(SQLModel, table=True):
     id: Optional[int] = Field(None, primary_key=True)
     thread_id: Optional[int] = Field(None, foreign_key="thread.id")
     item_id: int = Field(..., foreign_key="item.id")
-    count: int = Field(default=0, description="")
+    count: int = Field(default=0, description="大于这个数才允许访问")
 
     thread: Thread = Relationship(back_populates="auths")
-    item: Item = Relationship(back_populates="auths")
+    item: Item = Relationship(back_populates="thread_auths")
+
+
+class Read(SQLModel, table=True):
+    """
+    帖子
+    """
+
+    __tablename__ = "read"
+    id: Optional[int] = Field(None, primary_key=True)
+    user_id: int = Field(..., foreign_key="user.id", description="发帖人")
+    thread_id: int = Field(..., foreign_key="thread.id", description="哪个板块的帖子")
+    name: str = Field(..., alias="title")
+    create_time: datetime = Field(
+        default_factory=partial(datetime.now, tz=tz), description="创建时间"
+    )
+    update_time: Optional[datetime] = Field(
+        None,
+        description="更新时间",
+        sa_column=Column(DateTime(), onupdate=partial(datetime.now, tz=tz)),
+    )
+
+    user: User = Relationship(back_populates="reads")  # 发帖人
+    thread: Thread = Relationship(back_populates="reads")  # 所属板块
+    auths: List["ReadAuth"] = Relationship(back_populates="read")
+
+
+class ReadAuth(SQLModel, table=True):
+    """
+    帖子{read_id}所需要的权限 为{item_id}>={count}
+    """
+
+    __tablename__ = "read_auth"
+    id: Optional[int] = Field(None, primary_key=True)
+    read_id: Optional[int] = Field(None, foreign_key="read.id")
+    item_id: int = Field(..., foreign_key="item.id")
+    count: int = Field(default=0, description="大于这个数才允许访问")
+
+    read: Read = Relationship(back_populates="auths")
+    item: Item = Relationship(back_populates="read_auths")
+
+
+class ViewAddress(SQLModel, table=True):
+    """
+    巡礼位置
+    """
+
+    __tablename__ = "address"
+    id: Optional[int] = Field(None, primary_key=True)
+    name: str = Field(..., description="名字")
+    author_id: Optional[int] = Field(None, foreign_key="user.id", description="上传者")
+    position: str = Field(sa_column=Column(Geometry("POINT")), description="")
+    description: str = Field(..., description="描述")
+    status: Optional[int] = Field(0, description="0未审核 -1审核失败 1审核通过")
+
+    author: User = Relationship(back_populates="addresses")
+
+    @property
+    def pos(self):
+        return tuple(map(float, self.position.lstrip("POINT(").rstrip(")").split()))
+
+    @pos.setter
+    def pos(self, pos: str):
+        self.position = f"POINT({pos[0]} {pos[1]})"
+
+    def dump(self):
+        data = self.model_dump(exclude_none=True)
+        data["position"] = self.pos
+        return data
 
 
 async def init_db():

@@ -63,7 +63,7 @@ class UserSetProfile(BaseModel):
 
 
 class UserGetProfile(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", from_attributes=True)
     id: int = Field(..., description="uid")  # serialization_alias="user_id")
     name: str = Field(..., max_length=20)
     age: Optional[int] = Field(None, gt=0, lt=200)

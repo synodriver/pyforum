@@ -126,9 +126,7 @@ async def handle_setprofile(
 
 async def handle_getprofile(session: AsyncSession, user_id: int):
     user: User = (await session.exec(select(User).where(User.id == user_id))).one()
-    return UserGetProfile.model_validate(user.model_dump(exclude_none=True)).model_dump(
-        exclude_none=True
-    )
+    return UserGetProfile.model_validate(user).model_dump(exclude_none=True)
 
 
 async def get_user_by_name(session: AsyncSession, name: str):
